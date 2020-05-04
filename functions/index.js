@@ -30,15 +30,18 @@ exports.events = functions.https.onRequest((request, response) => {
   switch (event.type) {
   case 'payment_intent.succeeded':
     const paymentIntent = event.data.object;
-    console.log('PaymentIntent was successful!')
+    console.log('PaymentIntent was successful!');
     break;
   case 'payment_method.attached':
     const paymentMethod = event.data.object;
-    console.log('PaymentMethod was attached to a Customer!')
+    console.log('PaymentMethod was attached to a Customer!');
     break;
+  // case 'charge.succeeded':
+  //   const 
   // ... handle other event types
   default:
-    return response.json({received: true});
+    console.log(event);
+    return response.json({received: true, event});
     // Unexpected event type
     // return response.status(400).end();
   }
