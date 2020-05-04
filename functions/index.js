@@ -1,7 +1,53 @@
 const functions = require('firebase-functions');
+
+
+
+// Stripe Init
 const stripe = require('stripe')(functions.config().keys.webhooks);
 
 const endpointSecret = functions.config().keys.signing;
+
+
+
+
+// SettleUp Init
+// Firebase App (the core Firebase SDK) is always required and
+// must be listed before other Firebase SDKs
+var firebase = require("firebase/app");
+
+// Add the Firebase products that you want to use
+require("firebase/auth");
+
+var firebaseConfig = {
+  apiKey: functions.config().keys.settleup.sandbox.apikey,
+  authDomain: "settle-up-sandbox.firebaseapp.com",
+  databaseURL: "https://settle-up-sandbox.firebaseio.com",
+  projectId: "settle-up-sandbox",
+  storageBucket: "settle-up-sandbox.appspot.com",
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+
+var idtoken = functions.config().keys.settleup.sandbox.idtoken;
+
+
+// Build Firebase credential with the Google ID token.
+var credential = firebase.auth.GoogleAuthProvider.credential(idtoken);
+
+// Sign in with credential from the Google user.
+firebase.auth().signInWithCredential(credential).catch(function(error) {
+  // Handle Errors here.
+  var errorCode = error.code;
+  var errorMessage = error.message;
+  // The email of the user's account used.
+  var email = error.email;
+  // The firebase.auth.AuthCredential type that was used.
+  var credential = error.credential;
+  // ...
+  console.log(error);
+});
+
 
 
 
@@ -41,13 +87,12 @@ exports.events = functions.https.onRequest((request, response) => {
   // ... handle other event types
   default:
     console.log(event);
-    return response.json({received: true, event});
     // Unexpected event type
     // return response.status(400).end();
   }
 
   // Return a response to acknowledge receipt of the event
-  return response.json({received: true});
+  return response.json({received: true, event});
 
 
 
