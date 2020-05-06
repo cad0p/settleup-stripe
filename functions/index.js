@@ -25,7 +25,7 @@ const environment = functions.config().keys.environment;
 // the groupName is the name of the group we want to use
 const groupName = functions.config().keys.settleup.groupname;
 
-let groupId;
+let groupId, buyerId;
 
 
 
@@ -154,6 +154,36 @@ async function findMemberId(memberName) {
 
 
 
+function createTransactionFrom(stripeTrans) {
+  return {
+    'category': '🎟',
+    'currencyCode': stripeTrans.currency.toUpperCase(),
+    'dateTime': stripeTrans.created * 1000, // stripe measures in seconds, settleup in ms
+    'items': [
+      {
+        'amount': (stripeTrans.amount / 100).toString(), // stripe measures in integers, settleup like normal ($15.00)
+        'forWhom': [
+          {
+            'memberId': buyerId,
+            'weight': '1',
+          },
+        ],
+      },
+    ],
+    'purpose': 'Quota Associativa',
+    'type': 'expense',
+    'whoPaid': [
+      {
+        'memberId': buyerId,
+        'weight': '1',
+      },
+    ],
+  }
+}
+
+
+
+
 
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
@@ -173,7 +203,7 @@ exports.events = functions.https.onRequest(async (request, response) => {
 
   const sig = request.headers['stripe-signature'];
 
-  let event, buyerId;
+  let event, settleUpTrans;
 
   try {
     // event is the stripe webhook, containing the transaction/user
@@ -202,9 +232,9 @@ exports.events = functions.https.onRequest(async (request, response) => {
     const stripeTrans = event.data.object;
     // get the id of the buyer by matching the name with the name on Settle Up
     buyerId = await findMemberId(stripeTrans.billing_details.name);
-    // await createTransactionFrom(event);
+    settleUpTrans = createTransactionFrom(stripeTrans);
     
-    console.log(buyerId);
+    console.log(settleUpTrans);
 
   // ... handle other event types
   default:
@@ -215,7 +245,7 @@ exports.events = functions.https.onRequest(async (request, response) => {
   }
 
   // Return a response to acknowledge receipt of the event
-  return response.json({received: true, groupId});
+  return response.json({received: true, settleUpTrans});
 
 
 
