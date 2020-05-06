@@ -127,6 +127,31 @@ async function findGroupId(userGroups) {
 }
 
 
+async function getGroupMembers() {
+  url = `https://settle-up-${environment}.firebaseio.com/members/${groupId}.json?auth=${idtoken}`;
+  try {
+    const response = await axios.get(url);
+    const data = response.data;
+    // console.log(Object.keys(response));
+    console.log(data);
+    return data;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+async function findMemberId(memberName) {
+  const groupMembers = await getGroupMembers();
+  for (var memberId in groupMembers) {
+    if (memberName == groupMembers[memberId].name) {
+      return memberId;
+    }
+  }
+  return null;
+}
+
+
 
 
 
@@ -148,9 +173,10 @@ exports.events = functions.https.onRequest(async (request, response) => {
 
   const sig = request.headers['stripe-signature'];
 
-  let event;
+  let event, buyerId;
 
   try {
+    // event is the stripe webhook, containing the transaction/user
     event = stripe.webhooks.constructEvent(request.rawBody, sig, endpointSecret);
   }
   catch (err) {
@@ -169,11 +195,16 @@ exports.events = functions.https.onRequest(async (request, response) => {
     break;
   case 'charge.succeeded':
     // get the user groups
-
     const userGroups = await getUserGroups();
+    // get the group id with name groupName, to use and add the transaction.
     groupId = await findGroupId(userGroups);
+    // get the stripe transaction
+    const stripeTrans = event.data.object;
+    // get the id of the buyer by matching the name with the name on Settle Up
+    buyerId = await findMemberId(stripeTrans.billing_details.name);
+    // await createTransactionFrom(event);
     
-    console.log(groupId);
+    console.log(buyerId);
 
   // ... handle other event types
   default:
