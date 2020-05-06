@@ -199,7 +199,25 @@ async function postTransaction(transaction) {
   }  
 }
 
-
+async function postMember(memberName) {
+  url = `https://settle-up-${environment}.firebaseio.com/members/${groupId}.json?auth=${idtoken}`;
+  const json = {
+    'active': true,
+    'defaultWeight': '1',
+    'name': memberName
+  }
+  try {
+    const response = await axios.post(url, json);
+    const data = response.data;
+    console.log(Object.keys(data));
+    console.log(data);
+    return data;
+  } catch (error) {
+    console.error(Object.keys(error.response));
+    console.error(error.response);
+    return null;
+  }  
+}
 
 
 
@@ -248,7 +266,15 @@ exports.events = functions.https.onRequest(async (request, response) => {
     const paymentMethod = event.data.object;
     console.log('PaymentMethod was attached to a Customer!');
     break;
+  case 'customer.created':
+    // get the stripe customer
+    const stripeCust = event.data.object;
+    memberId = (await postMember(stripeCust.email)).name;
+    // Return a response to acknowledge receipt of the event
+    return response.json({received: true, memberId: memberId});
+
   case 'charge.succeeded':
+    
     // get the stripe transaction
     const stripeTrans = event.data.object;
     // get the id of the buyer by matching the name with the name on Settle Up
