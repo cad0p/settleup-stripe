@@ -1,4 +1,33 @@
 const functions = require('firebase-functions');
+//Axios for web GET POST
+const axios = require("axios");
+
+
+let url;
+
+
+// // Mail Init
+// const nodemailer = require('nodemailer');
+// const cors = require('cors')({origin: true});
+
+// let transporter = nodemailer.createTransport({
+//     service: 'gmail',
+//     auth: {
+//         user: functions.config().keys.gmail.user,
+//         pass: functions.config().keys.gmail.pass
+//     }
+// });
+
+
+// The environment can be either sandbox or live
+const environment = functions.config().keys.environment;
+
+// the groupName is the name of the group we want to use
+const groupName = functions.config().keys.settleup.groupname;
+
+let groupId;
+
+
 
 
 
@@ -20,33 +49,83 @@ require("firebase/auth");
 
 var firebaseConfig = {
   apiKey: functions.config().keys.settleup.sandbox.apikey,
-  authDomain: "settle-up-sandbox.firebaseapp.com",
-  databaseURL: "https://settle-up-sandbox.firebaseio.com",
-  projectId: "settle-up-sandbox",
-  storageBucket: "settle-up-sandbox.appspot.com",
+  authDomain: `settle-up-${environment}.firebaseapp.com`,
+  databaseURL: `https://settle-up-${environment}.firebaseio.com`,
+  projectId: `settle-up-${environment}`,
+  storageBucket: `settle-up-${environment}.appspot.com`,
 };
 
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
-var idtoken = functions.config().keys.settleup.sandbox.idtoken;
+let user;
 
+let idtoken;
 
-// Build Firebase credential with the Google ID token.
-var credential = firebase.auth.GoogleAuthProvider.credential(idtoken);
-
-// Sign in with credential from the Google user.
-firebase.auth().signInWithCredential(credential).catch(function(error) {
+firebase.auth().signInWithEmailAndPassword(
+  functions.config().keys.settleup.sandbox.email, 
+  functions.config().keys.settleup.sandbox.password).catch(function(error) {
   // Handle Errors here.
   var errorCode = error.code;
   var errorMessage = error.message;
-  // The email of the user's account used.
-  var email = error.email;
-  // The firebase.auth.AuthCredential type that was used.
-  var credential = error.credential;
-  // ...
   console.log(error);
+  // ...
 });
+
+firebase.auth().onAuthStateChanged(function(isUser) {
+  if (isUser) {
+    // User is signed in.
+    user = firebase.auth().currentUser;
+    console.log(user);
+  } else {
+    // No user is signed in.
+    console.log('User is not signed in');
+  }
+});
+
+
+
+
+
+async function getUserGroups() {
+  url = `https://settle-up-${environment}.firebaseio.com/userGroups/${user.uid}.json?auth=${idtoken}`;
+  try {
+    const response = await axios.get(url);
+    const data = response.data;
+    // console.log(Object.keys(response));
+    console.log(data);
+    return data;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+
+async function getGroupDetails(groupId) {
+  url = `https://settle-up-${environment}.firebaseio.com/groups/${groupId}.json?auth=${idtoken}`;
+  try {
+    const response = await axios.get(url);
+    const data = response.data;
+    // console.log(Object.keys(response));
+    console.log(data);
+    return data;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+
+async function findGroupId(userGroups) {
+  for (var groupId in userGroups) {
+    if (groupName == (await getGroupDetails(groupId)).name) {
+      return groupId;
+    }
+  }
+  return null;
+}
+
 
 
 
@@ -59,7 +138,13 @@ firebase.auth().signInWithCredential(credential).catch(function(error) {
 // });
 
 
-exports.events = functions.https.onRequest((request, response) => {
+exports.events = functions.https.onRequest(async (request, response) => {
+  idtoken = await user.getIdToken();
+  // user.getIdToken().then(function(realIdToken) {  // <------ Check this line
+  //   idtoken = realIdToken
+  //   console.log(realIdToken); // It shows the Firebase token now
+  // });
+  console.log(`idtoken: ${idtoken}`);
 
   const sig = request.headers['stripe-signature'];
 
@@ -82,17 +167,24 @@ exports.events = functions.https.onRequest((request, response) => {
     const paymentMethod = event.data.object;
     console.log('PaymentMethod was attached to a Customer!');
     break;
-  // case 'charge.succeeded':
-  //   const 
+  case 'charge.succeeded':
+    // get the user groups
+    if (!groupId) {
+      const userGroups = await getUserGroups();
+      groupId = await findGroupId(userGroups);
+    }
+    console.log(groupId);
+
   // ... handle other event types
   default:
     console.log(event);
+
     // Unexpected event type
     // return response.status(400).end();
   }
 
   // Return a response to acknowledge receipt of the event
-  return response.json({received: true, event});
+  return response.json({received: true, groupId});
 
 
 
