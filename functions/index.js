@@ -25,7 +25,7 @@ const environment = functions.config().keys.environment;
 // the groupName is the name of the group we want to use
 const groupName = functions.config().keys.settleup.groupname;
 
-let groupId, buyerId;
+let buyerId, groupId;
 
 
 
@@ -42,29 +42,25 @@ const endpointSecret = functions.config().keys.signing;
 // SettleUp Init
 // Firebase App (the core Firebase SDK) is always required and
 // must be listed before other Firebase SDKs
-var firebase = require("firebase/app");
+const firebase = require("firebase/app");
 
 // Add the Firebase products that you want to use
 require("firebase/auth");
 
-var firebaseConfig = {
+const firebaseConfig = {
   apiKey: functions.config().keys.settleup.sandbox.apikey,
   authDomain: `settle-up-${environment}.firebaseapp.com`,
   databaseURL: `https://settle-up-${environment}.firebaseio.com`,
   projectId: `settle-up-${environment}`,
   storageBucket: `settle-up-${environment}.appspot.com`,
 };
+firebase.initializeApp(firebaseConfig);
 
-
-let user;
-
-let idtoken;
+let user, idtoken;
 
 // Initialize Firebase
-function initFirebase() {
-  firebase.initializeApp(firebaseConfig);
-
-  firebase.auth().signInWithEmailAndPassword(
+async function initFirebase() {
+  await firebase.auth().signInWithEmailAndPassword(
     functions.config().keys.settleup.sandbox.email, 
     functions.config().keys.settleup.sandbox.password).catch(function(error) {
     // Handle Errors here.
@@ -79,7 +75,7 @@ function initFirebase() {
       // User is signed in.
       user = firebase.auth().currentUser;
       console.log(user);
-      return; 
+      return user; 
     } else {
       // No user is signed in.
       console.log('User is not signed in');
@@ -184,7 +180,7 @@ function createTransactionFrom(stripeTrans) {
         'weight': '1',
       },
     ],
-  }
+  };
 }
 
 
@@ -216,13 +212,19 @@ async function postTransaction(transaction) {
 
 
 exports.events = functions.https.onRequest(async (request, response) => {
-  user || initFirebase();
+  user ||  await initFirebase();
   idtoken = await user.getIdToken();
   // user.getIdToken().then(function(realIdToken) {  // <------ Check this line
   //   idtoken = realIdToken
   //   console.log(realIdToken); // It shows the Firebase token now
   // });
   console.log(`idtoken: ${idtoken}`);
+
+  // SettleUp Init
+  // get the user groups
+  const userGroups = await getUserGroups();
+  // get the group id with name groupName, to use and add the transaction.
+  groupId = await findGroupId(userGroups);
 
   const sig = request.headers['stripe-signature'];
 
@@ -247,10 +249,6 @@ exports.events = functions.https.onRequest(async (request, response) => {
     console.log('PaymentMethod was attached to a Customer!');
     break;
   case 'charge.succeeded':
-    // get the user groups
-    const userGroups = await getUserGroups();
-    // get the group id with name groupName, to use and add the transaction.
-    groupId = await findGroupId(userGroups);
     // get the stripe transaction
     const stripeTrans = event.data.object;
     // get the id of the buyer by matching the name with the name on Settle Up
@@ -261,6 +259,9 @@ exports.events = functions.https.onRequest(async (request, response) => {
     
     console.log(settleUpTrans);
 
+    // Return a response to acknowledge receipt of the event
+    return response.json({received: true, settleUpTrans});
+
   // ... handle other event types
   default:
     console.log(event);
@@ -270,7 +271,7 @@ exports.events = functions.https.onRequest(async (request, response) => {
   }
 
   // Return a response to acknowledge receipt of the event
-  return response.json({received: true, settleUpTrans});
+  return response.json({received: true});
 
 
 
