@@ -257,47 +257,12 @@ exports.events = functions.https.onRequest(async (request, response) => {
   }
 
   // Handle the event
-  switch (event.type) {
-  case 'payment_intent.succeeded':
-    const paymentIntent = event.data.object;
-    console.log('PaymentIntent was successful!');
-    break;
-  case 'payment_method.attached':
-    const paymentMethod = event.data.object;
-    console.log('PaymentMethod was attached to a Customer!');
-    break;
-  case 'customer.created':
-    // get the stripe customer
-    const stripeCust = event.data.object;
-    memberId = (await postMember(stripeCust.email)).name;
-    // Return a response to acknowledge receipt of the event
-    return response.json({received: true, memberId: memberId});
-
-  case 'charge.succeeded':
-    
-    // get the stripe transaction
-    const stripeTrans = event.data.object;
-    // get the id of the buyer by matching the name with the name on Settle Up
-    buyerId = await findMemberId(stripeTrans.billing_details.name);
-    settleUpTrans = createTransactionFrom(stripeTrans);
-    // this does not work yet
-    // await postTransaction(settleUpTrans);
-    
-    console.log(settleUpTrans);
-
-    // Return a response to acknowledge receipt of the event
-    return response.json({received: true, settleUpTrans});
-
-  // ... handle other event types
-  default:
-    console.log(event);
-
-    // Unexpected event type
-    // return response.status(400).end();
-  }
+  console.log(event.type);
+  console.log(event);
+  
 
   // Return a response to acknowledge receipt of the event
-  return response.json({received: true});
+  return response.json({received: true, event: event.type});
 
 
 
