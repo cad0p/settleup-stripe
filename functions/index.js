@@ -161,7 +161,7 @@ function createTransactionFrom(stripeTrans) {
     'dateTime': stripeTrans.created * 1000, // stripe measures in seconds, settleup in ms
     'items': [
       {
-        'amount': (stripeTrans.amount / 100).toString(), // stripe measures in integers, settleup like normal ($15.00)
+        'amount': '15.00',//(stripeTrans.amount / 100).toString(), // stripe measures in integers, settleup like normal ($15.00)
         'forWhom': [
           {
             'memberId': buyerId,
@@ -179,6 +179,22 @@ function createTransactionFrom(stripeTrans) {
       },
     ],
   }
+}
+
+
+async function postTransaction(transaction) {
+  url = `https://settle-up-${environment}.firebaseio.com/transactions/${groupId}.json?auth=${idtoken}`;
+  try {
+    const response = await axios.post(url, transaction);
+    // const data = response.data;
+    console.log(Object.keys(response));
+    console.log(response);
+    return response;
+  } catch (error) {
+    console.error(Object.keys(error.response));
+    console.error(error.response);
+    return null;
+  }  
 }
 
 
@@ -233,6 +249,8 @@ exports.events = functions.https.onRequest(async (request, response) => {
     // get the id of the buyer by matching the name with the name on Settle Up
     buyerId = await findMemberId(stripeTrans.billing_details.name);
     settleUpTrans = createTransactionFrom(stripeTrans);
+    // this does not work yet
+    // await postTransaction(settleUpTrans);
     
     console.log(settleUpTrans);
 
