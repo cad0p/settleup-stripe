@@ -169,10 +169,10 @@ exports.events = functions.https.onRequest(async (request, response) => {
     break;
   case 'charge.succeeded':
     // get the user groups
-    if (!groupId) {
-      const userGroups = await getUserGroups();
-      groupId = await findGroupId(userGroups);
-    }
+
+    const userGroups = await getUserGroups();
+    groupId = await findGroupId(userGroups);
+    
     console.log(groupId);
 
   // ... handle other event types
