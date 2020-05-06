@@ -55,33 +55,39 @@ var firebaseConfig = {
   storageBucket: `settle-up-${environment}.appspot.com`,
 };
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
 
 let user;
 
 let idtoken;
 
-firebase.auth().signInWithEmailAndPassword(
-  functions.config().keys.settleup.sandbox.email, 
-  functions.config().keys.settleup.sandbox.password).catch(function(error) {
-  // Handle Errors here.
-  var errorCode = error.code;
-  var errorMessage = error.message;
-  console.log(error);
-  // ...
-});
+// Initialize Firebase
+function initFirebase() {
+  firebase.initializeApp(firebaseConfig);
 
-firebase.auth().onAuthStateChanged(function(isUser) {
-  if (isUser) {
-    // User is signed in.
-    user = firebase.auth().currentUser;
-    console.log(user);
-  } else {
-    // No user is signed in.
-    console.log('User is not signed in');
-  }
-});
+  firebase.auth().signInWithEmailAndPassword(
+    functions.config().keys.settleup.sandbox.email, 
+    functions.config().keys.settleup.sandbox.password).catch(function(error) {
+    // Handle Errors here.
+    var errorCode = error.code;
+    var errorMessage = error.message;
+    console.log(error);
+    // ...
+  });
+
+  firebase.auth().onAuthStateChanged(function(isUser) {
+    if (isUser) {
+      // User is signed in.
+      user = firebase.auth().currentUser;
+      console.log(user);
+      return; 
+    } else {
+      // No user is signed in.
+      console.log('User is not signed in');
+    }
+  });
+}
+
+initFirebase();
 
 
 
@@ -210,6 +216,7 @@ async function postTransaction(transaction) {
 
 
 exports.events = functions.https.onRequest(async (request, response) => {
+  user || initFirebase();
   idtoken = await user.getIdToken();
   // user.getIdToken().then(function(realIdToken) {  // <------ Check this line
   //   idtoken = realIdToken
