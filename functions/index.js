@@ -276,17 +276,32 @@ exports.events = functions.https.onRequest(async (request, response) => {
   case 'charge.succeeded':
     
     // get the stripe transaction
-    const stripeTrans = event.data.object;
+    const stripeTx = event.data.object;
     // get the id of the buyer by matching the name with the name on Settle Up
-    buyerId = await findMemberId(stripeTrans.billing_details.name);
-    settleUpTrans = createTransactionFrom(stripeTrans);
+    buyerId = await findMemberId(stripeTx.billing_details.name);
+    settleUpTx = createTransactionFrom(stripeTx);
+    console.log(settleUpTx);
     // this does not work yet
     // await postTransaction(settleUpTrans);
+
+    // get the transaction id to fetch the fees
+    const txId = stripeTx.balance_transaction;
+    console.log(txId);
     
-    console.log(settleUpTrans);
+    
+    const fee = (await stripe.balanceTransactions.retrieve(txId)).fee;
+    console.log(fee);
+    // post the transaction to settle up (income mode missing)
+
+    // check if the Stripe user is present in SettleUp, if not create it
+    // 
+
+    
+    
+    
 
     // Return a response to acknowledge receipt of the event
-    return response.json({received: true, settleUpTrans});
+    return response.json({received: true, fee: fee});
 
   // ... handle other event types
   default:
