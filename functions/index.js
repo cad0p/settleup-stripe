@@ -5,6 +5,8 @@ const axios = require("axios");
 
 let url;
 
+// const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 
 // // Mail Init
 // const nodemailer = require('nodemailer');
@@ -125,6 +127,7 @@ async function findGroupId(userGroups) {
       return groupId;
     }
   }
+  console.error(`Group with name '${groupName}' not found!`);
   return null;
 }
 
@@ -143,13 +146,22 @@ async function getGroupMembers() {
   }
 }
 
-async function findMemberId(memberName) {
+async function findMemberId(memberName, createIfNotFound=false) {
   const groupMembers = await getGroupMembers();
   for (var memberId in groupMembers) {
     if (memberName == groupMembers[memberId].name) {
       return memberId;
     }
   }
+  if (createIfNotFound) {
+    // retry with a delay once again, maybe the member was not added yet! (as it's the case in my testing)
+    console.log(`Member '${memberName}' not found, creating him now on SettleUp!`);
+
+    // returns the memberId
+    return (await postMember(memberName)).name;
+  }
+  // we have tried to retry, friend :/
+  console.error('Member not found!');
   return null;
 }
 
@@ -161,9 +173,10 @@ function createTransactionFrom(stripeTrans) {
     'category': '🎟',
     'currencyCode': stripeTrans.currency.toUpperCase(),
     'dateTime': stripeTrans.created * 1000, // stripe measures in seconds, settleup in ms
+    'fixedExchangeRate': true,
     'items': [
       {
-        'amount': '15.00',//(stripeTrans.amount / 100).toString(), // stripe measures in integers, settleup like normal ($15.00)
+        'amount': (stripeTrans.amount / 100).toString(), // stripe measures in integers, settleup like normal ($15.00)
         'forWhom': [
           {
             'memberId': buyerId,
@@ -188,10 +201,10 @@ async function postTransaction(transaction) {
   url = `https://settle-up-${environment}.firebaseio.com/transactions/${groupId}.json?auth=${idtoken}`;
   try {
     const response = await axios.post(url, transaction);
-    // const data = response.data;
-    console.log(Object.keys(response));
-    console.log(response);
-    return response;
+    const data = response.data;
+    console.log(Object.keys(data));
+    console.log(data);
+    return data;
   } catch (error) {
     console.error(Object.keys(error.response));
     console.error(error.response);
@@ -266,23 +279,29 @@ exports.events = functions.https.onRequest(async (request, response) => {
     const paymentMethod = event.data.object;
     console.log('PaymentMethod was attached to a Customer!');
     break;
-  case 'customer.created':
-    // get the stripe customer
-    const stripeCust = event.data.object;
-    memberId = (await postMember(stripeCust.email)).name;
-    // Return a response to acknowledge receipt of the event
-    return response.json({received: true, memberId: memberId});
+    // I commented it because while it works for ad-hoc requests, 
+    // actually charge.succeded is called before customer.created,
+    // so the function is executed in the wrong order this way
+  // case 'customer.created': 
+  //   // get the stripe customer
+  //   const stripeCust = event.data.object;
+  //   console.log(stripeCust);
+  //   const memberId = (await postMember(stripeCust.email)).name;
+
+  //   // Return a response to acknowledge receipt of the event
+  //   return response.json({received: true, memberId: memberId});
 
   case 'charge.succeeded':
     
     // get the stripe transaction
     const stripeTx = event.data.object;
+    console.log(stripeTx);
     // get the id of the buyer by matching the name with the name on Settle Up
-    buyerId = await findMemberId(stripeTx.billing_details.name);
+    buyerId = await findMemberId(stripeTx.billing_details.name, createIfNotFound=true);
     settleUpTx = createTransactionFrom(stripeTx);
     console.log(settleUpTx);
-    // this does not work yet
-    // await postTransaction(settleUpTrans);
+    // post the transaction
+    await postTransaction(settleUpTx);
 
     // get the transaction id to fetch the fees
     const txId = stripeTx.balance_transaction;
