@@ -167,10 +167,39 @@ async function findMemberId(memberName, createIfNotFound=false) {
 
 
 
+function createIncomeTransactionTo(sellerId, currency, amount) {
+  return {
+    'category': '🎫',
+    'currencyCode': currency.toUpperCase(),
+    'dateTime': Date.now(), // settleup in ms just like Date.now()
+    'fixedExchangeRate': true,
+    'items': [
+      {
+        'amount': (amount / 100).toString(), // stripe measures in cents (1500), settleup like normal ($15.00)
+        'forWhom': [
+          {
+            'memberId': sellerId,
+            'weight': '1',
+          },
+        ],
+      },
+    ],
+    'purpose': 'Commissioni',
+    'type': 'expense',
+    'whoPaid': [
+      {
+        'memberId': sellerId,
+        'weight': '1',
+      },
+    ],
+  };
+}
+
+
 
 function createTransactionFrom(stripeTrans) {
   return {
-    'category': '🎟',
+    'category': '🎫',
     'currencyCode': stripeTrans.currency.toUpperCase(),
     'dateTime': stripeTrans.created * 1000, // stripe measures in seconds, settleup in ms
     'fixedExchangeRate': true,
@@ -308,13 +337,18 @@ exports.events = functions.https.onRequest(async (request, response) => {
     console.log(txId);
     
     
-    const fee = (await stripe.balanceTransactions.retrieve(txId)).fee;
+    const balanceTx = await stripe.balanceTransactions.retrieve(txId);
+    const fee = balanceTx.fee;
+    const currency = balanceTx.currency;
     console.log(fee);
-    // post the transaction to settle up (income mode missing)
 
     // check if the Stripe user is present in SettleUp, if not create it
-    // 
+    stripeUserId = await findMemberId('Stripe', createIfNotFound=true);
 
+    // post the transaction to settle up (income mode missing)
+    settleUpTx = createIncomeTransactionTo(stripeUserId, currency, fee);
+    console.log(settleUpTx);
+    await postTransaction(settleUpTx);
     
     
     
