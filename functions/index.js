@@ -146,10 +146,33 @@ async function getGroupMembers() {
   }
 }
 
+
+async function putMemberActive(groupMembers, memberId, active=true) {
+  url = `https://settle-up-${environment}.firebaseio.com/members/${groupId}.json?auth=${idtoken}`;
+  const json = groupMembers;
+  json[memberId].active = active;
+  try {
+    const response = await axios.put(url, json);
+    const data = response.data;
+    // console.log(Object.keys(response));
+    console.log(data);
+    return data;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+
+// this function also enables the member if disabled
 async function findMemberId(memberName, createIfNotFound=false) {
   const groupMembers = await getGroupMembers();
   for (var memberId in groupMembers) {
     if (memberName == groupMembers[memberId].name) {
+      const member = groupMembers[memberId];
+      if (member.active == false) {
+        await putMemberActive(groupMembers, memberId, active=true);
+      }
       return memberId;
     }
   }
@@ -326,11 +349,16 @@ exports.events = functions.https.onRequest(async (request, response) => {
     const stripeTx = event.data.object;
     console.log(stripeTx);
     // get the id of the buyer by matching the name with the name on Settle Up
+    // this also activates the member if inactive
     buyerId = await findMemberId(stripeTx.billing_details.name, createIfNotFound=true);
     settleUpTx = createTransactionFrom(stripeTx);
     console.log(settleUpTx);
     // post the transaction
     await postTransaction(settleUpTx);
+
+    // disable the member as it's not going to be active for a while
+    const groupMembers = await getGroupMembers();
+    await putMemberActive(groupMembers, buyerId, active=false);
 
     // get the transaction id to fetch the fees
     const txId = stripeTx.balance_transaction;
