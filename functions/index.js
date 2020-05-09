@@ -220,15 +220,20 @@ function createIncomeTransactionTo(sellerId, currency, amount) {
 
 
 
-function createTransactionFrom(stripeTrans) {
+function createTransactionFrom(stripeTx, prodName, nOfInstallments) {
+  var purpose = prodName + ' ';
+  if (nOfInstallments > 1) {
+    purpose += nOfInstallments.toString() + ' ';
+  }
+  purpose += stripeTx.billing_details.name;
   return {
     'category': '🎫',
-    'currencyCode': stripeTrans.currency.toUpperCase(),
+    'currencyCode': stripeTx.currency.toUpperCase(),
     'dateTime': stripeTrans.created * 1000, // stripe measures in seconds, settleup in ms
     'fixedExchangeRate': true,
     'items': [
       {
-        'amount': (stripeTrans.amount / 100).toString(), // stripe measures in integers, settleup like normal ($15.00)
+        'amount': (stripeTx.amount / 100).toString(), // stripe measures in integers, settleup like normal ($15.00)
         'forWhom': [
           {
             'memberId': buyerId,
@@ -237,7 +242,7 @@ function createTransactionFrom(stripeTrans) {
         ],
       },
     ],
-    'purpose': 'Quota Associativa',
+    'purpose': purpose,
     'type': 'expense',
     'whoPaid': [
       {
@@ -351,7 +356,22 @@ exports.events = functions.https.onRequest(async (request, response) => {
     // get the id of the buyer by matching the name with the name on Settle Up
     // this also activates the member if inactive
     buyerId = await findMemberId(stripeTx.billing_details.name, createIfNotFound=true);
-    settleUpTx = createTransactionFrom(stripeTx);
+    const invoice = await stripe.invoices.retrieve(stripeTx.invoice);
+    const subId = invoice.subscription;
+    // there could be multiple items in an invoice, not supported for now
+    const prodId = invoice.lines.data[0].plan.product;
+    const product = await stripe.product.retrieve(prodId);
+    let nOfInstallments;
+    if (subId != null) {
+      nOfInstallments = (await stripe.invoices.list(subId)).data
+        .filter(installment => installment.status == 'paid')
+        .length
+      ;
+    }
+    else {
+      nOfInstallments = 1;
+    }
+    settleUpTx = createTransactionFrom(stripeTx, product.name, nOfInstallments);
     console.log(settleUpTx);
     // post the transaction
     await postTransaction(settleUpTx);
