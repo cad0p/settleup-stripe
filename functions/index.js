@@ -226,10 +226,11 @@ function createTransactionFrom(stripeTx, prodName, nOfInstallments) {
     purpose += nOfInstallments.toString() + ' ';
   }
   purpose += stripeTx.billing_details.name;
+  console.log(purpose);
   return {
     'category': '🎫',
     'currencyCode': stripeTx.currency.toUpperCase(),
-    'dateTime': stripeTrans.created * 1000, // stripe measures in seconds, settleup in ms
+    'dateTime': stripeTx.created * 1000, // stripe measures in seconds, settleup in ms
     'fixedExchangeRate': true,
     'items': [
       {
@@ -360,10 +361,10 @@ exports.events = functions.https.onRequest(async (request, response) => {
     const subId = invoice.subscription;
     // there could be multiple items in an invoice, not supported for now
     const prodId = invoice.lines.data[0].plan.product;
-    const product = await stripe.product.retrieve(prodId);
+    const product = await stripe.products.retrieve(prodId);
     let nOfInstallments;
     if (subId != null) {
-      nOfInstallments = (await stripe.invoices.list(subId)).data
+      nOfInstallments = (await stripe.invoices.list({subscription: subId})).data
         .filter(installment => installment.status == 'paid')
         .length
       ;
