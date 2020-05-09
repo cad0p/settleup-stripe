@@ -34,9 +34,10 @@ let buyerId, groupId;
 
 
 // Stripe Init
-const stripe = require('stripe')(functions.config().keys.webhooks);
+// the key will look something like rk_... or sk_... if you didn't dedicate a key to this integration
+const stripe = require('stripe')(functions.config().keys.stripe[environment].apikey);
 
-const endpointSecret = functions.config().keys.signing;
+const endpointSecret = functions.config().keys.stripe[environment].webhook;
 
 
 
@@ -50,7 +51,7 @@ const firebase = require("firebase/app");
 require("firebase/auth");
 
 const firebaseConfig = {
-  apiKey: functions.config().keys.settleup.sandbox.apikey,
+  apiKey: functions.config().keys.settleup[environment].apikey,
   authDomain: `settle-up-${environment}.firebaseapp.com`,
   databaseURL: `https://settle-up-${environment}.firebaseio.com`,
   projectId: `settle-up-${environment}`,
@@ -63,8 +64,8 @@ let user, idtoken;
 // Initialize Firebase
 async function initFirebase() {
   await firebase.auth().signInWithEmailAndPassword(
-    functions.config().keys.settleup.sandbox.email, 
-    functions.config().keys.settleup.sandbox.password).catch(function(error) {
+    functions.config().keys.settleup.bot.email, 
+    functions.config().keys.settleup.bot.password).catch(function(error) {
     // Handle Errors here.
     var errorCode = error.code;
     var errorMessage = error.message;
