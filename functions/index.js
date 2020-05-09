@@ -198,7 +198,7 @@ function createIncomeTransactionTo(sellerId, currency, amount) {
     'fixedExchangeRate': true,
     'items': [
       {
-        'amount': (amount / 100).toString(), // stripe measures in cents (1500), settleup like normal ($15.00)
+        'amount': (-amount / 100).toString(), // stripe measures in cents (1500), settleup like normal ($15.00)
         'forWhom': [
           {
             'memberId': sellerId,
@@ -357,19 +357,21 @@ exports.events = functions.https.onRequest(async (request, response) => {
     // get the id of the buyer by matching the name with the name on Settle Up
     // this also activates the member if inactive
     buyerId = await findMemberId(stripeTx.billing_details.name, createIfNotFound=true);
-    const invoice = await stripe.invoices.retrieve(stripeTx.invoice);
-    const subId = invoice.subscription;
-    // there could be multiple items in an invoice, not supported for now
-    const prodId = invoice.lines.data[0].plan.product;
-    const product = await stripe.products.retrieve(prodId);
-    let nOfInstallments;
-    if (subId != null) {
+    
+    let nOfInstallments, product = {};
+    if (stripeTx.invoice != null) {
+      const invoice = await stripe.invoices.retrieve(stripeTx.invoice);
+      const subId = invoice.subscription;
+      // there could be multiple items in an invoice, not supported for now
+      const prodId = invoice.lines.data[0].plan.product;
+      product = await stripe.products.retrieve(prodId);
       nOfInstallments = (await stripe.invoices.list({subscription: subId})).data
         .filter(installment => installment.status == 'paid')
         .length
       ;
     }
     else {
+      product.name = stripeTx.description;
       nOfInstallments = 1;
     }
     settleUpTx = createTransactionFrom(stripeTx, product.name, nOfInstallments);
