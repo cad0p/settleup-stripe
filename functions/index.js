@@ -365,7 +365,10 @@ exports.events = functions.https.onRequest(async (request, response) => {
       const subId = invoice.subscription;
       // there could be multiple items in an invoice, not supported for now
       const prodId = invoice.lines.data[0].plan.product;
+      const planId = invoice.lines.data[0].plan.id;
+      const plan = await stripe.plans.retrieve(planId); 
       product = await stripe.products.retrieve(prodId);
+      product.name += ' ' + plan.nickname;
       nOfInstallments = (await stripe.invoices.list({subscription: subId})).data
         .filter(installment => installment.status == 'paid')
         .length
