@@ -208,7 +208,7 @@ function createIncomeTransactionTo(sellerId, currency, amount) {
         ],
       },
     ],
-    'purpose': 'Commissioni',
+    'purpose': 'Stripe Fee',
     'type': 'expense',
     'whoPaid': [
       {
