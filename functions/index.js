@@ -318,7 +318,7 @@ exports.events = functions.https.onRequest(async (request, response) => {
 
   const sig = request.headers['stripe-signature'];
 
-  let event, settleUpTrans;
+  let event, settleUpTx;
 
   try {
     // event is the stripe webhook, containing the transaction/user
