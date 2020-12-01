@@ -89,7 +89,38 @@ async function initFirebase() {
 initFirebase();
 
 
+// limit stands for max length
+// these are the limits of Settle Up
+const LIMIT_MEMBER_NAME = 20;
+const LIMIT_TX_NAME = 128;
+// this means that after 99999 installments it might throw an error of max Tx length
+const LIMIT_N_OF_INSTALLMENTS = 5;
+const LIMIT_PROD_NAME = LIMIT_TX_NAME - 1 - LIMIT_N_OF_INSTALLMENTS - 1 - LIMIT_MEMBER_NAME;
 
+function prepareForSettleUp_memberName(memberName) {
+  if (memberName.length <= LIMIT_MEMBER_NAME) {
+    return memberName;
+  } else {
+    console.error('memberName too long');
+    console.error(memberName);
+    console.error(memberName.substring(0, LIMIT_PROD_NAME - 2) + '..');
+    return memberName.substring(0, LIMIT_MEMBER_NAME - 2) + '..';
+  }
+}
+
+function prepareForSettleUp_prodName(prodName) {
+  if (prodName.length <= LIMIT_PROD_NAME) {
+    return prodName;
+  } else {
+    // this is the normal transaction on settle up.
+    // the minus 2 is to substitute with '..' if the product name is too long
+    // so for example "Product Name is very looooo.. 43210 Giovanni Pietro De.."
+    console.error('prodName too long');
+    console.error(prodName);
+    console.error(prodName.substring(0, LIMIT_PROD_NAME - 2) + '..');
+    return prodName.substring(0, LIMIT_PROD_NAME - 2) + '..';
+  }
+}
 
 
 async function getUserGroups() {
@@ -167,6 +198,7 @@ async function putMemberActive(groupMembers, memberId, active=true) {
 
 // this function also enables the member if disabled
 async function findMemberId(memberName, createIfNotFound=false) {
+  memberName = prepareForSettleUp_memberName(memberName);
   const groupMembers = await getGroupMembers();
   for (var memberId in groupMembers) {
     if (memberName == groupMembers[memberId].name) {
@@ -222,7 +254,7 @@ function createIncomeTransactionTo(sellerId, currency, amount) {
 
 
 function createTransactionFrom(stripeTx, prodName, nOfInstallments) {
-  var purpose = prodName + ' ';
+  var purpose = prepareForSettleUp_prodName(prodName) + ' ';
   if (nOfInstallments > 1) {
     purpose += nOfInstallments.toString() + ' ';
   }
