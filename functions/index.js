@@ -77,7 +77,7 @@ async function initFirebase() {
     if (isUser) {
       // User is signed in.
       user = firebase.auth().currentUser;
-      console.log(user);
+      console.log(user.email);
       return user; 
     } else {
       // No user is signed in.
@@ -386,7 +386,12 @@ exports.events = functions.https.onRequest(async (request, response) => {
     
     // get the stripe transaction
     const stripeTx = event.data.object;
+    console.log(stripeTx.billing_details)
     console.log(stripeTx);
+    // check if the name is not null
+    if (!stripeTx.billing_details.name) {
+      return response.json({received: false, error: `The CardHolder did not set his CardHolder Name, so this request cannot be handled. Please add this transaction to SettleUp manually, and update the billing details of this customer: ${stripeTx.customer}`});
+    }
     // get the id of the buyer by matching the name with the name on Settle Up
     // this also activates the member if inactive
     buyerId = await findMemberId(stripeTx.billing_details.name, createIfNotFound=true);
