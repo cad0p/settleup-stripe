@@ -386,7 +386,6 @@ exports.events = functions.https.onRequest(async (request, response) => {
     
     // get the stripe transaction
     const stripeTx = event.data.object;
-    console.log(stripeTx.billing_details)
     console.log(stripeTx);
     // check if the name is not null
     if (!stripeTx.billing_details.name) {
