@@ -388,9 +388,21 @@ exports.events = functions.https.onRequest(async (request, response) => {
     const stripeTx = event.data.object;
     console.log(stripeTx);
     // check if the name is not null
-    if (!stripeTx.billing_details.name) {
-      return response.status(400).json({received: false, error: `The CardHolder did not set his CardHolder Name, so this request cannot be handled. Please add this transaction to SettleUp manually, and update the billing details of this customer: ${stripeTx.customer}`});
+    if (stripeTx.billing_details.name == null) {
+      // check if the customer has a name set (maybe after the transaction happened)
+      const customerId = stripeTx.customer
+      if (customerId == null) {
+        return response.status(400).json({received: false, error: 'No customer in transacttion'});
+      }
+      const customer = await stripe.customers.retrieve(customerId);
+      if (customer.name == null) {
+        return response.status(400).json({received: false, error: `The CardHolder did not set his CardHolder Name, so this request cannot be handled. Please add this transaction to SettleUp manually, and update the billing details of this customer: ${stripeTx.customer}`});
+      }
+      else {
+        stripeTx.billing_details.name = customer.name
+      }
     }
+
     // get the id of the buyer by matching the name with the name on Settle Up
     // this also activates the member if inactive
     buyerId = await findMemberId(stripeTx.billing_details.name, createIfNotFound=true);
