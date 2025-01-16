@@ -436,7 +436,7 @@ exports.events = functions.https.onRequest(async (request, response) => {
     await putMemberActive(groupMembers, buyerId, active=false);
 
     // get the transaction id to fetch the fees
-    const txId = stripeTx.balance_transaction;
+    const txId = stripeTx.id;
     console.log(txId);
     
     
