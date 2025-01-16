@@ -340,7 +340,7 @@ exports.events = functions.https.onRequest(async (request, response) => {
   //   idtoken = realIdToken
   //   console.log(realIdToken); // It shows the Firebase token now
   // });
-  console.log(`idtoken: ${idtoken}`);
+  // console.log(`idtoken: ${idtoken}`);
 
   // SettleUp Init
   // get the user groups
