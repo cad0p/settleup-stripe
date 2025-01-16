@@ -223,11 +223,11 @@ async function findMemberId(memberName, createIfNotFound=false) {
 
 
 
-function createIncomeTransactionTo(sellerId, currency, amount) {
+function createIncomeTransactionTo(sellerId, currency, amount, txId, txDateTime) {
   return {
     'category': '🎫',
     'currencyCode': currency.toUpperCase(),
-    'dateTime': Date.now(), // settleup in ms just like Date.now()
+    'dateTime': txDateTime, // in ms
     'fixedExchangeRate': true,
     'items': [
       {
@@ -240,7 +240,7 @@ function createIncomeTransactionTo(sellerId, currency, amount) {
         ],
       },
     ],
-    'purpose': 'Stripe Fee',
+    'purpose': 'Stripe Fee: ' + txId,
     'type': 'expense',
     'whoPaid': [
       {
@@ -323,7 +323,54 @@ async function postMember(memberName) {
   }  
 }
 
+async function postStripeFeeTransaction(txId, txDateTime) {
+  const balanceTx = await stripe.balanceTransactions.retrieve(txId);
+  const currency = balanceTx.currency;
+  const fee = balanceTx.fee;
 
+  console.log(fee);
+
+  // check if the Stripe user is present in SettleUp, if not create it
+  const stripeUserId = await findMemberId('Stripe', createIfNotFound=true);
+
+  // post the transaction to settle up (income mode missing)
+  const settleUpTx = createIncomeTransactionTo(
+    stripeUserId,
+    currency,
+    fee,
+    txId,
+    txDateTime,
+  );
+  console.log(settleUpTx);
+  await postTransaction(settleUpTx);
+  
+  return fee;
+}
+
+async function getTransactionsForGroup(dateTime, limit=10) {
+  url = `https://settle-up-${environment}.firebaseio.com/transactions/${groupId}.json?auth=${idtoken}`;
+  url += `&orderBy="dateTime"&limitToLast=${limit}&equalTo=${dateTime}`;
+  try {
+    const response = await axios.get(url);
+    return response.data;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+async function hasFeeTransaction(txId, txDateTime) {
+  // return true for transactions older than January 16th, 2025
+  // back compatibility for previous way of handling fees
+  if (txDateTime < Date.parse('16 Jan 2025 00:00:00 GMT')) {
+    return true;
+  }
+  const purpose = `Stripe Fee: ${txId}`;
+  const transactions = await getTransactionsForGroup(txDateTime);
+  console.log("Transactions:", transactions);
+  // return true if the transaction is already present
+  return Object.values(transactions).some(tx => tx.purpose == purpose);
+}
 
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
@@ -340,24 +387,25 @@ exports.events = functions.https.onRequest(async (request, response) => {
   //   idtoken = realIdToken
   //   console.log(realIdToken); // It shows the Firebase token now
   // });
-  // console.log(`idtoken: ${idtoken}`);
+  console.log(`idtoken: ${idtoken}`);
 
   // SettleUp Init
   // get the user groups
   const userGroups = await getUserGroups();
   // get the group id with name groupName, to use and add the transaction.
   groupId = await findGroupId(userGroups);
+  console.log(`groupId: ${groupId}`);
 
   const sig = request.headers['stripe-signature'];
 
-  let event, settleUpTx;
+  let event, settleUpTx, txId, txDateTime, fee;
 
   try {
     // event is the stripe webhook, containing the transaction/user
     event = stripe.webhooks.constructEvent(request.rawBody, sig, endpointSecret);
   }
   catch (err) {
-    response.status(400).send(`Webhook Error: ${err.message}`);
+    return response.status(400).send(`Webhook Error: ${err.message}`);
   }
 
   // Handle the event
@@ -392,7 +440,7 @@ exports.events = functions.https.onRequest(async (request, response) => {
       // check if the customer has a name set (maybe after the transaction happened)
       const customerId = stripeTx.customer
       if (customerId == null) {
-        return response.status(400).json({received: false, error: 'No customer in transacttion'});
+        return response.status(400).json({received: false, error: 'No customer in transaction'});
       }
       const customer = await stripe.customers.retrieve(customerId);
       if (customer.name == null) {
@@ -436,27 +484,37 @@ exports.events = functions.https.onRequest(async (request, response) => {
     await putMemberActive(groupMembers, buyerId, active=false);
 
     // get the transaction id to fetch the fees
-    const txId = stripeTx.id;
+    txId = stripeTx.balance_transaction;
     console.log(txId);
-    
-    
-    const balanceTx = await stripe.balanceTransactions.retrieve(txId);
-    const fee = balanceTx.fee;
-    const currency = balanceTx.currency;
-    console.log(fee);
+    txDateTime = stripeTx.created * 1000;
 
-    // check if the Stripe user is present in SettleUp, if not create it
-    stripeUserId = await findMemberId('Stripe', createIfNotFound=true);
-
-    // post the transaction to settle up (income mode missing)
-    settleUpTx = createIncomeTransactionTo(stripeUserId, currency, fee);
-    console.log(settleUpTx);
-    await postTransaction(settleUpTx);
+    // if stripe fee tx id is not present, we'll check it in `charge.updated` event
+    if (txId == null) {
+      return response.json({received: true, fee: "Fee not found, will be checked in charge.updated event"});
+    }
     
-    
-    
+    fee = await postStripeFeeTransaction(txId, txDateTime);
 
     // Return a response to acknowledge receipt of the event
+    return response.json({received: true, fee: fee});
+
+  case 'charge.updated':
+    const charge = event.data.object;
+    txId = charge.balance_transaction;
+    txDateTime = charge.created * 1000;
+    
+    if (!txId) {
+      return response.json({received: true, message: "No balance transaction found"});
+    }
+
+    // Check if we already processed this fee
+    const feeExists = await hasFeeTransaction(txId, txDateTime);
+    if (feeExists) {
+      return response.json({received: true, message: "Fee transaction already exists"});
+    }
+
+    // Post the fee transaction
+    fee = await postStripeFeeTransaction(txId, txDateTime);
     return response.json({received: true, fee: fee});
 
   // ... handle other event types
