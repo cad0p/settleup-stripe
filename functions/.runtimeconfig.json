@@ -1,0 +1,34 @@
+{
+  "firebase": {
+    "projectId": "project-id",
+    "databaseURL": "https://project-id.firebaseio.com",
+    "storageBucket": "project-id.appspot.com",
+    "locationId": "europe-west"
+  },
+  "keys": {
+    "settleup": {
+      "bot": {
+        "password": "botPassword",
+        "email": "settleup.bot@email.com"
+      },
+      "sandbox": {
+        "apikey": "sandboxKey"
+      },
+      "groupname": "Test Group",
+      "live": {
+        "apikey": "liveKey"
+      }
+    },
+    "stripe": {
+      "live": {
+        "apikey": "rk_live_KEY",
+        "webhook": "whsec_WEBHOOK"
+      },
+      "sandbox": {
+        "apikey": "rk_test_KEY",
+        "webhook": "whsec_WEBHOOK"
+      }
+    },
+    "environment": "live"
+  }
+}
